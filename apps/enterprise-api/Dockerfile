@@ -10,10 +10,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir uv
-
 COPY pyproject.toml .
-RUN uv pip install --system -r <(uv pip compile pyproject.toml) || pip install --no-cache-dir fastapi uvicorn pydantic langchain langchain-core langgraph qdrant-client sqlalchemy python-jose passlib python-multipart pypdf python-docx requests
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+        fastapi \
+        uvicorn \
+        pydantic \
+        pydantic-settings \
+        langchain \
+        langchain-core \
+        langgraph \
+        qdrant-client \
+        sqlalchemy \
+        python-jose \
+        passlib \
+        python-multipart \
+        pypdf \
+        python-docx \
+        requests \
+        gunicorn
 
 COPY . .
 

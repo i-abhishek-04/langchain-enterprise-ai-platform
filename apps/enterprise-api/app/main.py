@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -18,7 +19,7 @@ app = FastAPI(
     description="Enterprise AI Engineering Platform REST API with RAG, LangGraph Multi-Agent Workflows, and Guardrails"
 )
 
-# Configured Allowed Origins for Security
+# Configured Allowed Origins for Local & Production Deployment
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -26,10 +27,16 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173"
 ]
 
-# CORS Security Middleware
+# Allow custom production domains passed via env var
+env_origins = os.getenv("ALLOWED_ORIGINS", "")
+if env_origins:
+    ALLOWED_ORIGINS.extend([origin.strip() for origin in env_origins.split(",") if origin.strip()])
+
+# CORS Security Middleware (Allows Vercel domains & configured origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Requested-With"],

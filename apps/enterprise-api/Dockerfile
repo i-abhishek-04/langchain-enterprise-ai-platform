@@ -8,6 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
@@ -23,6 +24,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
         langgraph \
         qdrant-client \
         sqlalchemy \
+        psycopg2-binary \
         python-jose \
         passlib \
         python-multipart \

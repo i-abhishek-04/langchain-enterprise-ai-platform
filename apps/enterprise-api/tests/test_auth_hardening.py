@@ -5,18 +5,35 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy import desc, func
+from sqlalchemy import create_engine, desc, func
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.api import router
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, make_database_url
 from app.db.models import ChatHistory, EvaluationLog, User
 from app.main import app
 from auth_helpers import create_test_auth
 
 
 client = TestClient(app)
+
+
+def test_postgres_urls_select_psycopg_v3():
+    urls = (
+        "postgresql://user:pass@example.com:5432/app",
+        "postgres://user:pass@example.com:5432/app",
+    )
+    for value in urls:
+        url = make_database_url(value)
+        assert url.drivername == "postgresql+psycopg"
+        engine = create_engine(url)
+        assert engine.dialect.driver == "psycopg"
+        engine.dispose()
+
+
+def test_sqlite_url_keeps_its_driver():
+    assert make_database_url("sqlite:///./test.db").drivername == "sqlite"
 
 
 def test_auth_required_and_admin_routes_are_role_protected():

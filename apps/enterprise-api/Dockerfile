@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY . .
 
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+    pip install --no-cache-dir . "psycopg2-binary>=2.9.9" && \
+    python -c "import psycopg2"
 
 EXPOSE 8000
 

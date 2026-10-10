@@ -112,7 +112,7 @@ export default function App() {
         borderTop: '1px solid var(--border-color)',
         background: 'rgba(0,0,0,0.2)'
       }}>
-        LangChain Enterprise AI Engineering Platform • FastAPI, LangGraph, Qdrant & PostgreSQL
+        Document Q&amp;A Playground • FastAPI, LangGraph, LangChain, and Qdrant
       </footer>
 
     </div>

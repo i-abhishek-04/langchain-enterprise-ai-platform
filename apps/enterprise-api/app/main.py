@@ -16,7 +16,10 @@ init_qdrant_collection()
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Enterprise AI Engineering Platform REST API with RAG, LangGraph Multi-Agent Workflows, and Guardrails"
+    description=(
+        "Document Q&A API using a LangGraph workflow, LangChain LCEL for Groq chat calls, "
+        "Qdrant retrieval, and input guardrails."
+    )
 )
 
 # Configured Allowed Origins for Local & Production Deployment

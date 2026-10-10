@@ -6,7 +6,7 @@ except ImportError:
     BaseSettings = object
 
 class Settings(BaseSettings if BaseSettings is not object else object):
-    PROJECT_NAME: str = "Enterprise AI Engineering Platform"
+    PROJECT_NAME: str = "AI Document Q&A API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 
@@ -22,7 +22,17 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     QDRANT_HOST: str = os.getenv("QDRANT_HOST", "localhost")
     QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
     QDRANT_URL: str = os.getenv("QDRANT_URL", "http://localhost:6333")
-    QDRANT_COLLECTION: str = "enterprise_documents"
+    QDRANT_COLLECTION: str = os.getenv("QDRANT_COLLECTION", "enterprise_documents_v2")
+    LEGACY_QDRANT_COLLECTION: str = os.getenv(
+        "LEGACY_QDRANT_COLLECTION", "enterprise_documents"
+    )
+    EMBEDDING_MODEL: str = os.getenv(
+        "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+    )
+    EMBEDDING_CACHE_DIR: str = os.getenv(
+        "EMBEDDING_CACHE_DIR",
+        os.path.join(os.path.expanduser("~"), ".cache", "fastembed"),
+    )
 
     # Free Tier AI Keys
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")

@@ -1,11 +1,11 @@
-// Multi-Provider AI Service Layer (100% Free Tiers & Local Models)
+// Direct browser provider calls and a local prompt-only simulator.
 
 export const PROVIDERS = {
   groq: {
     id: 'groq',
     name: 'Groq Cloud',
-    description: 'Free high-speed API (Llama 3.3, DeepSeek R1 Distill, Mixtral)',
-    badge: 'Fastest Free API',
+    description: 'Chat completions through the Groq API',
+    badge: 'Remote API',
     apiKeyRequired: true,
     keyUrl: 'https://console.groq.com/keys',
     models: [
@@ -15,24 +15,11 @@ export const PROVIDERS = {
       { id: 'llama3-8b-8192', name: 'Llama 3 8B' },
     ]
   },
-  gemini: {
-    id: 'gemini',
-    name: 'Google Gemini',
-    description: 'Free tier via Google AI Studio',
-    badge: '1.5M Token Window',
-    apiKeyRequired: true,
-    keyUrl: 'https://aistudio.google.com/app/apikey',
-    models: [
-      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Free Tier)' },
-    ]
-  },
   openrouter: {
     id: 'openrouter',
-    name: 'OpenRouter (Free Tier)',
-    description: 'Aggregator with dozens of 100% free models',
-    badge: 'Free Models',
+    name: 'OpenRouter',
+    description: 'Chat completions through the OpenRouter API',
+    badge: 'Remote API',
     apiKeyRequired: true,
     keyUrl: 'https://openrouter.ai/keys',
     models: [
@@ -40,19 +27,6 @@ export const PROVIDERS = {
       { id: 'google/gemma-2-9b-it:free', name: 'Gemma 2 9B (Free)' },
       { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free)' },
       { id: 'qwen/qwen-2.5-coder-32b-instruct:free', name: 'Qwen 2.5 Coder 32B (Free)' },
-    ]
-  },
-  huggingface: {
-    id: 'huggingface',
-    name: 'HuggingFace Inference',
-    description: 'Serverless inference for open models',
-    badge: 'Open Source',
-    apiKeyRequired: true,
-    keyUrl: 'https://huggingface.co/settings/tokens',
-    models: [
-      { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B' },
-      { id: 'meta-llama/Llama-3.1-8B-Instruct', name: 'Llama 3.1 8B' },
-      { id: 'mistralai/Mistral-7B-Instruct-v0.3', name: 'Mistral 7B Instruct' }
     ]
   },
   ollama: {
@@ -71,14 +45,14 @@ export const PROVIDERS = {
   },
   browser: {
     id: 'browser',
-    name: 'Browser AI Fallback',
-    description: 'Instant zero-config client simulation mode for testing',
-    badge: 'Zero Config',
+    name: 'Local Prompt Simulator',
+    description: 'Displays a local placeholder; no model is called',
+    badge: 'Simulation',
     apiKeyRequired: false,
     keyUrl: '#',
     models: [
-      { id: 'langchain-agent-sim', name: 'LangChain Agent Simulator' },
-      { id: 'js-code-assistant', name: 'JS Code & Chain Specialist' }
+      { id: 'langchain-agent-sim', name: 'Prompt Simulation' },
+      { id: 'js-code-assistant', name: 'Prompt Simulation' }
     ]
   }
 };
@@ -245,32 +219,16 @@ export async function streamCompletion({
         }
       }
     }
-    // 4. Zero-Config Browser Fallback Mode (Simulated LangChain execution)
+    // 4. Local simulation mode; no model or LangChain chain is executed.
     else {
-      const simText = `[LangChain Execution Result via Free Tier Engine]
+      const simText = `[Local Prompt Simulation — no model was called]
 
-System Prompt Applied: "${systemPrompt || 'Default System Prompt'}"
+System Prompt: "${systemPrompt || 'Default System Prompt'}"
 
-Analysis & Output:
-Here is the generated solution for your input:
+Input:
+${userPrompt}
 
-\`\`\`python
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "${systemPrompt || 'You are a helpful assistant.'}"),
-    ("user", "{input}")
-])
-
-# Processed query using ${modelId || 'Free Tier Model'}
-print("Received user query: ${userPrompt.replace(/"/g, '\\"')}")
-\`\`\`
-
-Key Insights:
-• Successfully executed chain through standard LangChain Expression Language (LCEL).
-• Free tier response verified and formatted with clean structure.
-• Temperature: ${temperature} | Max Tokens: ${maxTokens}`;
+This placeholder text was generated locally. It is not an AI-generated answer.`;
 
       const words = simText.split(' ');
       for (let i = 0; i < words.length; i++) {

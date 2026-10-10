@@ -1,15 +1,15 @@
-# 🚀 LangChain Enterprise AI Engineering Platform
+# AI Document Q&A and Model Playground
 
 <div align="center">
 
-![LangChain](https://img.shields.io/badge/LangChain-v0.3-blue.svg?style=for-the-badge&logo=langchain)
+![LangChain](https://img.shields.io/badge/LangChain-LCEL-blue.svg?style=for-the-badge&logo=langchain)
 ![LangGraph](https://img.shields.io/badge/LangGraph-4--Agent--Workflow-orange.svg?style=for-the-badge&logo=python)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector--Database-red.svg?style=for-the-badge&logo=qdrant)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg?style=for-the-badge&logo=fastapi)
 ![React](https://img.shields.io/badge/React-18.0+-61DAFB.svg?style=for-the-badge&logo=react)
 ![Docker](https://img.shields.io/badge/Docker-Compose--Ready-2496ED.svg?style=for-the-badge&logo=docker)
 
-**An Enterprise-Grade Multi-Agent AI Studio, Production RAG Engine & Observability Platform**
+**A full-stack document Q&A API and browser-based model playground**
 
 [Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [API Reference](#-api-reference) • [Testing](#-testing- suite)
 
@@ -19,37 +19,39 @@
 
 ## 🌟 Overview
 
-The **LangChain Enterprise AI Engineering Platform** is a full-stack, production-ready GenAI platform engineered for enterprise scalability, observability, and safety. 
+This repository contains a React model playground and a FastAPI document Q&A service. The backend uses a compiled LangGraph workflow, LangChain's LCEL for Groq chat calls, Qdrant for document storage/search, and SQLAlchemy for application records and telemetry.
 
-It bridges the gap between an **Interactive Multi-LLM Developer Playground** and an **Autonomous 4-Agent Enterprise RAG Pipeline**, allowing developers and enterprise teams to benchmark models, process unstructured documents, execute guardrailed retrieval, and inspect multi-agent reasoning trajectories in real time.
+It is a prototype, not a production-ready enterprise platform. The browser playground calls selected providers directly; the backend RAG endpoint currently supports Groq as its live model provider and otherwise returns retrieved passages without claiming they are generated answers.
 
 ---
 
 ## 🔥 Key Features
 
-### 🤖 1. Autonomous 4-Agent LangGraph Pipeline
-A stateful, multi-agent orchestration workflow built on **LangGraph**:
-* **Agent 1: Document Processing Agent** — Validates inputs, masks sensitive PII (SSN, emails, phone numbers), detects prompt injections, and decomposes complex multi-part queries.
-* **Agent 2: Retriever Agent** — Executes hybrid dense vector & phrase-matched keyword retrieval from **Qdrant**.
-* **Agent 3: Reasoning Agent** — Synthesizes answers strictly constrained to retrieved context using free & enterprise LLMs (Groq Llama 3.3 70B, Gemini, OpenRouter).
-* **Agent 4: Verification Agent** — Computes a dynamic multi-factor confidence score (0.0 to 1.0) based on context overlap and retrieval density. Gates hallucinated responses with an explicit zero-chunk safety fallback.
+### 🤖 1. LangGraph Workflow
+The backend compiles four Python processing steps into a sequential **LangGraph `StateGraph`**:
+* **Document processing** — Validates and sanitizes the query and splits multi-question inputs.
+* **Retrieval** — Searches Qdrant, with an in-memory lexical fallback.
+* **Reasoning** — Uses a LangChain LCEL chain (`ChatPromptTemplate | ChatOpenAI | StrOutputParser`) for Groq. Without a live model response, it returns retrieved passages with citations instead of canned answers.
+* **Verification** — Applies a heuristic context-overlap confidence check; this is not an independent model-based fact checker.
 
-### 🔍 2. Enterprise RAG & Qdrant Vector Engine
+### 🔍 2. Document ingestion and retrieval
 * **Multi-Format Ingestion:** Parsers for **PDF, DOCX, TXT, and Markdown**.
-* **Markdown-Aware Section Splitter:** Keeps section headings attached to body paragraphs (`chunk_size=400`, `chunk_overlap=80`).
-* **Hybrid Search:** Combines hash-vector similarity with term-frequency phrase boosting for narrow policy queries.
-* **Citation Highlighting:** Displays source filenames, page numbers, and exact context snippets.
+* **Chunking:** Splits ingested content into chunks and stores source metadata.
+* **Embeddings:** Uses FastEmbed's `sentence-transformers/all-MiniLM-L6-v2` CPU model for 384-dimensional semantic embeddings. The model downloads on first use.
+* **Hybrid search:** Combines Qdrant semantic similarity with BM25-style keyword relevance. The current implementation loads document text into memory for keyword ranking, so its corpus size is limited by backend memory.
+* **Existing Qdrant data:** Startup copies chunks from the legacy `enterprise_documents` collection into `enterprise_documents_v2`, re-embedding them while preserving the legacy collection. Existing data remains available if migration is interrupted.
+* **Citations:** Responses include retrieved source filenames and context snippets.
 
 ### 🛡️ 3. Pure Python Security Guardrails
-* **PII Masking:** Automatic scrubbing of emails, phone numbers, and SSNs.
-* **Prompt Injection Defense:** Scans input streams for override patterns and jailbreak attempts.
+* **PII Masking:** Query sanitization masks detected emails, phone numbers, and SSNs.
+* **Prompt Injection Detection:** Checks query text against configured injection patterns.
 * **CORS & HTTP Security Headers:** Enforces `nosniff`, `DENY` framing, and restricted origin policies.
 
 ### 📊 4. Telemetry & Admin Dashboard
-* **Query Latency Tracking:** Measures step-by-step agent trajectory timing.
-* **Token Consumption Metrics:** Real-time token counter and estimated API costs.
-* **Hallucination Analytics:** Tracks pass/fail ratios and confidence score distributions.
-* **PostgreSQL Storage:** Relational database persistence for users, chat sessions, and evaluation logs.
+* **Query Latency Tracking:** Records total workflow latency.
+* **Token and cost metrics:** Estimates based on text length; these are not provider-reported token usage or billing data.
+* **Confidence metrics:** Tracks heuristic confidence scores and flagged responses.
+* **SQL Storage:** Persists users, chat sessions, and evaluation logs (PostgreSQL in Docker; SQLite by default for local setup).
 
 ---
 
@@ -65,12 +67,12 @@ flowchart TD
         G1 --> G2[Prompt Injection Detector]
     end
 
-    subgraph LangGraph ["🤖 LangGraph 4-Agent Workflow"]
+    subgraph LangGraph ["🤖 Compiled LangGraph StateGraph"]
         G2 --> A1[Agent 1: Doc Processing Agent]
         A1 --> A2[Agent 2: Retriever Agent]
         A2 <--> Qdrant[(🔴 Qdrant Vector Store)]
         A2 --> A3[Agent 3: Reasoning Agent]
-        A3 <--> Groq[☁️ Groq / LLM Providers]
+        A3 <--> Groq[☁️ Groq via LangChain LCEL]
         A3 --> A4[Agent 4: Verification Agent]
     end
 
@@ -78,6 +80,8 @@ flowchart TD
     A4 --> Response[✨ Grounded Response + Citations + Telemetry]
     Response --> UI
 ```
+
+The browser playground is a separate client-side app. Its chain visualizer is illustrative; the backend RAG endpoint is the part that executes the LangGraph workflow and LangChain chain.
 
 ---
 
@@ -94,6 +98,8 @@ docker-compose up --build
 * **Interactive Swagger Docs:** `http://localhost:8000/docs`
 * **Qdrant Vector Console:** `http://localhost:6333`
 
+Set a Groq key in the playground settings for live model responses. Without one, the backend returns retrieved passages rather than generating a synthesized answer. The first document indexing run downloads the embedding model and requires network access. When changing `EMBEDDING_MODEL`, configure a new Qdrant collection and re-index/migrate documents; vectors from different models must not share a collection.
+
 ---
 
 ### Option B: Local Manual Setup
@@ -103,7 +109,7 @@ docker-compose up --build
 cd apps/enterprise-api
 
 # Install dependencies
-pip install -r requirements.txt  # or: uv sync
+pip install -e .
 
 # Start FastAPI server
 uvicorn app.main:app --reload --port 8000
@@ -143,7 +149,7 @@ Run the full automated platform and bug regression test suites:
 ```bash
 cd apps/enterprise-api
 
-# Core Platform Test Suite (8 Tests)
+# Backend Test Suite
 python -c "import sys; sys.path.insert(0, '.'); import unittest; unittest.main(module='tests.run_tests')"
 
 # Bug Fix & RAG Retrieval Regression Suite (5 Tests)
@@ -156,7 +162,7 @@ python -c "import sys; sys.path.insert(0, '.'); import unittest; unittest.main(m
 
 **Abhishek**
 * **GitHub:** [@i-abhishek-04](https://github.com/i-abhishek-04)
-* **Project:** LangChain Enterprise AI Engineering Platform
+* **Project:** AI Document Q&A and Model Playground
 
 ---
 

@@ -1,6 +1,6 @@
-# 🏛️ Enterprise AI Engineering Platform Architecture
+# Document Q&A Platform Architecture
 
-This document provides a comprehensive technical overview of the **LangChain Enterprise AI Engineering Platform**.
+This document describes the current implementation. It is a prototype; the diagrams do not imply production SLAs or deployment guarantees.
 
 ---
 
@@ -16,7 +16,7 @@ flowchart TD
         Router["API Router (/api/v1)"]
         Auth["JWT Auth & Security"]
         Guard["Guardrails Middleware (PII, Injections)"]
-        Graph["LangGraph 4-Agent Orchestrator"]
+        Graph["Compiled LangGraph StateGraph"]
         Ingest["Document Processing & Chunking"]
     end
 
@@ -25,11 +25,9 @@ flowchart TD
         Postgres[("PostgreSQL Database (Port 5432)")]
     end
 
-    subgraph AI ["Free LLM Providers"]
-        Groq["Groq Cloud (Llama 3.3 70B, DeepSeek R1)"]
-        Gemini["Google Gemini 2.0 Flash"]
-        OpenRouter["OpenRouter Free Tier"]
-        Ollama["Local Ollama (localhost:11434)"]
+    subgraph AI ["Backend Model Integration"]
+        LCEL["LangChain LCEL"]
+        Groq["Groq OpenAI-compatible API"]
     end
 
     ReactUI <-->|REST API / JSON| Router
@@ -38,13 +36,23 @@ flowchart TD
     Guard --> Graph
     Ingest --> Qdrant
     Graph -->|Similarity Search| Qdrant
-    Graph -->|Free LLM Inference| Groq & Gemini & OpenRouter & Ollama
+    Graph --> LCEL --> Groq
     Router -->|Persist Logs, History & Metrics| Postgres
 ```
 
 ---
 
-## 🤖 Phase 2: LangGraph 4-Agent Sequence Flow
+The backend's active LangChain model integration is Groq. The React playground separately makes direct calls to Groq, OpenRouter, or local Ollama; selecting its local simulator does not call a model.
+
+Qdrant stores 384-dimensional FastEmbed `sentence-transformers/all-MiniLM-L6-v2` embeddings. Retrieval fuses semantic results with BM25-style keyword scores. The current implementation loads document text into backend memory for keyword ranking, which limits corpus size. The embedding model downloads on first use and is cached in a persistent Docker volume.
+
+On startup, the backend creates `enterprise_documents_v2` and migrates payloads from the legacy `enterprise_documents` collection by re-embedding the stored text. It leaves the legacy collection intact, so migration can be retried and old data remains available for recovery.
+
+Changing the embedding model requires a new Qdrant collection and re-indexing; vectors from different models must not be mixed.
+
+Without a successful Groq call, the backend returns retrieved passages as excerpts rather than synthesizing topic-specific canned answers.
+
+## LangGraph workflow
 
 ```mermaid
 sequenceDiagram
@@ -55,7 +63,8 @@ sequenceDiagram
     participant Agent3 as Reasoning Agent
     participant Agent4 as Verification Agent
     participant Qdrant as Qdrant Vector DB
-    participant LLM as Free LLM Engine
+    participant LCEL as LangChain LCEL
+    participant LLM as Groq Chat API
 
     User->>Agent1: Submit Query / Context
     Agent1->>Agent1: Validate & Mask PII & Detect Prompt Injections
@@ -63,14 +72,15 @@ sequenceDiagram
     Agent2->>Qdrant: Vector Similarity Search
     Qdrant-->>Agent2: Return Top-K Chunks
     Agent2->>Agent3: Context + Query Payload
-    Agent3->>LLM: Constrained Generation Request
+    Agent3->>LCEL: Prompt | ChatOpenAI | StrOutputParser
+    LCEL->>LLM: Constrained Generation Request
     LLM-->>Agent3: Draft Response Text
     Agent3->>Agent4: Draft Response + Context
     Agent4->>Agent4: Check Faithfulness & Hallucination Score
-    alt Confidence Score >= 0.65
+    alt Confidence Score >= 0.30
         Agent4-->>User: Return Verified Answer + Citations
-    else Confidence Score < 0.65
-        Agent4-->>User: Return "I don't have enough information."
+    else Confidence Score < 0.30
+        Agent4-->>User: Return "Information not found in indexed enterprise documents."
     end
 ```
 
@@ -84,7 +94,7 @@ langchain/
 │   ├── enterprise-api/            # FastAPI Backend Application
 │   │   ├── app/
 │   │   │   ├── api/               # REST API Routers (/documents, /chat, /history, /metrics, /auth)
-│   │   │   ├── agents/            # LangGraph 4-Agent Multi-Agent Workflow
+│   │   │   ├── agents/            # LangGraph workflow and LangChain model call
 │   │   │   ├── core/              # Security, JWT, App Config
 │   │   │   ├── db/                # SQLAlchemy Models & Session
 │   │   │   ├── guardrails/        # Injection Detection, PII Masking, Context Validation

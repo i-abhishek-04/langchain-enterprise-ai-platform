@@ -2,8 +2,12 @@ import time
 import re
 from typing import Dict, Any, List, TypedDict
 import requests
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END, START, StateGraph
 from app.rag.vectorstore import search_similar_chunks
-from app.guardrails.security import validate_input, calculate_dynamic_confidence, mask_pii
+from app.guardrails.security import validate_input, calculate_dynamic_confidence
 from app.core.config import settings
 
 class AgentState(TypedDict):
@@ -102,7 +106,7 @@ def run_reasoning_agent(state: AgentState) -> AgentState:
     query = state["sanitized_query"]
     provider_id = state.get("provider_id", "groq")
     model_id = state.get("model_id", "llama-3.3-70b-versatile")
-    api_key = state.get("api_key", "")
+    api_key = state.get("api_key", "") or settings.GROQ_API_KEY
 
     multi_part_note = " Address every distinct sub-question asked." if len(state["sub_queries"]) > 1 else ""
 
@@ -116,8 +120,32 @@ def run_reasoning_agent(state: AgentState) -> AgentState:
     state["is_fallback_mode"] = False
     state["fallback_reason"] = ""
 
-    # Call Groq API if API Key is available
-    if provider_id == "groq":
+    if provider_id == "groq" and api_key:
+        try:
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", system_instruction),
+                    ("human", "Context:\n{context}\n\nQuestion: {query}"),
+                ]
+            )
+            model = ChatOpenAI(
+                model=model_id,
+                api_key=api_key,
+                base_url="https://api.groq.com/openai/v1",
+                temperature=0.2,
+                timeout=12.0,
+            )
+            chain = prompt | model | StrOutputParser()
+            response_text = chain.invoke({"context": context, "query": query})
+            if not response_text.strip():
+                state["is_fallback_mode"] = True
+                state["fallback_reason"] = "LangChain returned an empty response."
+        except Exception as e:
+            state["is_fallback_mode"] = True
+            state["fallback_reason"] = f"LangChain Groq model call failed: {str(e)}"
+
+    # Retain the direct API call as a compatibility fallback if LangChain fails.
+    if provider_id == "groq" and not response_text:
         if not api_key:
             state["is_fallback_mode"] = True
             state["fallback_reason"] = "Groq API Key is missing. Add free key in Settings."
@@ -145,44 +173,40 @@ def run_reasoning_agent(state: AgentState) -> AgentState:
                 state["is_fallback_mode"] = True
                 state["fallback_reason"] = f"Groq Connection Error: {str(e)}"
 
-    # Local Intelligent Synthesis Fallback (when external API key is empty)
+    if provider_id != "groq":
+        state["is_fallback_mode"] = True
+        state["fallback_reason"] = (
+            f"The backend supports Groq through LangChain; provider '{provider_id}' "
+            "uses the local fallback."
+        )
+
+    # Return retrieved passages rather than fabricating a model answer.
     if not response_text:
         state["is_fallback_mode"] = True
         if not state["fallback_reason"]:
-            state["fallback_reason"] = f"Live {provider_id} provider API key missing or unavailable. Displaying retrieved context."
-
-        sources = ", ".join(list(set(c["filename"] for c in state["retrieved_chunks"])))
-        query_lower = query.lower()
-
-        # Handle specific question synthesis cleanly in fallback mode
-        answers = []
-        
-        for sub_q in state["sub_queries"]:
-            sub_lower = sub_q.lower()
-            if "refund window for monthly" in sub_lower or "monthly" in sub_lower:
-                answers.append("The refund window for monthly subscription plans is 14 days of the charge date (citing refund_and_support_policy.md).")
-            elif "annual" in sub_lower and ("30" in sub_lower or "45" in sub_lower or "period" in sub_lower):
-                answers.append("Refund Policy Note: refund_and_support_policy.md states a 30-day refund window for annual plans, while pricing_and_plans.md (March 2026 update) notes a 45-day refund processing window.")
-            elif "encryption" in sub_lower or "at rest" in sub_lower:
-                answers.append("All customer data is encrypted at rest using AES-256 military-grade encryption standards (citing security_faq.md).")
-
-        if answers:
-            response_text = "\n\n".join(answers) + f"\n\n[Citation: {sources}]"
-        else:
-            query_words = [w.lower() for w in query.split() if len(w) > 2]
-            matched_lines = []
-            for chunk in state["retrieved_chunks"]:
-                for line in chunk["text"].split("\n"):
-                    line_clean = line.strip()
-                    if line_clean and any(w in line_clean.lower() for w in query_words):
-                        if line_clean not in matched_lines:
-                            matched_lines.append(line_clean)
-
-            body = "\n".join(matched_lines[:5]) if matched_lines else context[:450]
-            response_text = f"Based on the enterprise documentation ({sources}):\n\n{body}\n\n[Citation: {sources}]"
+            state["fallback_reason"] = (
+                f"No live model response was available for provider '{provider_id}'. "
+                "Returning retrieved passages without synthesis."
+            )
+        excerpts = [
+            f"[{chunk['filename']}, page {chunk.get('page', 1)}]\n{chunk['text']}"
+            for chunk in state["retrieved_chunks"]
+        ]
+        response_text = (
+            "No live model response is available. Relevant retrieved passages:\n\n"
+            + "\n\n".join(excerpts)
+        )
 
     state["draft_response"] = response_text
-    state["agent_logs"].append(f"[Agent 3: Reasoning Agent] Synthesized response via {provider_id} ({model_id}).")
+    if state["is_fallback_mode"]:
+        state["agent_logs"].append(
+            f"[Agent 3: Reasoning Agent] Used fallback. {state['fallback_reason']}"
+        )
+    else:
+        state["agent_logs"].append(
+            f"[Agent 3: Reasoning Agent] Generated response with LangChain ChatOpenAI "
+            f"using {provider_id} ({model_id})."
+        )
     return state
 
 def run_verification_agent(state: AgentState) -> AgentState:
@@ -219,6 +243,24 @@ def run_verification_agent(state: AgentState) -> AgentState:
 
     return state
 
+
+def _build_agent_graph():
+    graph = StateGraph(AgentState)
+    graph.add_node("document_processing", run_document_processing_agent)
+    graph.add_node("retriever", run_retriever_agent)
+    graph.add_node("reasoning", run_reasoning_agent)
+    graph.add_node("verification", run_verification_agent)
+    graph.add_edge(START, "document_processing")
+    graph.add_edge("document_processing", "retriever")
+    graph.add_edge("retriever", "reasoning")
+    graph.add_edge("reasoning", "verification")
+    graph.add_edge("verification", END)
+    return graph.compile()
+
+
+agent_graph = _build_agent_graph()
+
+
 def execute_multi_agent_pipeline(
     query: str,
     session_id: str = "default_session",
@@ -226,7 +268,7 @@ def execute_multi_agent_pipeline(
     model_id: str = "llama-3.3-70b-versatile",
     api_key: str = ""
 ) -> Dict[str, Any]:
-    """Execute the complete 4-agent LangGraph workflow sequentially."""
+    """Execute the compiled four-node LangGraph workflow."""
     start_time = time.time()
     
     state: AgentState = {
@@ -254,14 +296,6 @@ def execute_multi_agent_pipeline(
         "total_tokens": len(query.split()) + 120
     }
 
-    # Step 1: Doc Processing Agent
-    state = run_document_processing_agent(state)
-    # Step 2: Retriever Agent
-    state = run_retriever_agent(state)
-    # Step 3: Reasoning Agent
-    state = run_reasoning_agent(state)
-    # Step 4: Verification Agent
-    state = run_verification_agent(state)
-
-    state["latency_ms"] = round((time.time() - start_time) * 1000, 2)
-    return state
+    result = agent_graph.invoke(state)
+    result["latency_ms"] = round((time.time() - start_time) * 1000, 2)
+    return result

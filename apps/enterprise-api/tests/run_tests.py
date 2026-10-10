@@ -1,11 +1,14 @@
 import sys
 import unittest
+from unittest.mock import patch
+from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableLambda
 from fastapi.testclient import TestClient
 from app.main import app
 from app.guardrails.security import validate_input, mask_pii, detect_prompt_injection, validate_output_against_context
 from app.rag.ingestion import process_and_index_document
 from app.rag.vectorstore import upsert_chunks, search_similar_chunks, _in_memory_docs
-from app.agents.workflow import execute_multi_agent_pipeline
+from app.agents.workflow import agent_graph, execute_multi_agent_pipeline
 
 class TestEnterprisePlatform(unittest.TestCase):
 
@@ -32,6 +35,57 @@ class TestEnterprisePlatform(unittest.TestCase):
 
     def tearDown(self):
         _in_memory_docs.clear()
+
+    def test_workflow_is_compiled_langgraph_state_graph(self):
+        node_names = set(agent_graph.get_graph().nodes)
+        self.assertTrue(
+            {
+                "document_processing",
+                "retriever",
+                "reasoning",
+                "verification",
+            }.issubset(node_names)
+        )
+
+    def test_groq_reasoning_uses_langchain_lcel(self):
+        fake_chat_model = RunnableLambda(
+            lambda _: AIMessage(
+                content="Qdrant stores document chunks for similarity retrieval."
+            )
+        )
+        with patch(
+            "app.agents.workflow.ChatOpenAI", return_value=fake_chat_model
+        ) as chat_model:
+            result = execute_multi_agent_pipeline(
+                query="Explain Qdrant vector database retrieval",
+                provider_id="groq",
+                model_id="test-model",
+                api_key="test-key",
+            )
+
+        chat_model.assert_called_once()
+        self.assertFalse(result["is_fallback_mode"])
+        self.assertIn("LangChain ChatOpenAI", result["agent_logs"][2])
+
+    def test_unconfigured_model_returns_new_document_excerpt(self):
+        chunk = {
+            "text": "The observatory telescope is recalibrated every four months.",
+            "filename": "observatory-manual.txt",
+            "page": 2,
+            "score": 0.9,
+        }
+        with patch(
+            "app.agents.workflow.search_similar_chunks", return_value=[chunk]
+        ):
+            result = execute_multi_agent_pipeline(
+                query="How often is the telescope recalibrated?",
+                provider_id="browser",
+            )
+
+        self.assertTrue(result["is_fallback_mode"])
+        self.assertIn("Relevant retrieved passages", result["final_response"])
+        self.assertIn(chunk["text"], result["final_response"])
+        self.assertNotIn("AES-256", result["final_response"])
 
     # 1. Guardrails Tests
     def test_pii_masking(self):

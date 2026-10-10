@@ -1,6 +1,7 @@
 import sys
 import os
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -112,7 +113,8 @@ class TestBugsStep4RegressionSuite(unittest.TestCase):
     def test_step4_4_out_of_scope_query(self):
         _in_memory_docs.clear() # Force 0 chunks
         query = "What are the key integration providers available in the enterprise system?"
-        result = execute_multi_agent_pipeline(query, provider_id="browser")
+        with patch("app.agents.workflow.search_similar_chunks", return_value=[]):
+            result = execute_multi_agent_pipeline(query, provider_id="browser")
         
         self.assertEqual(result["confidence_score"], 0.0)
         self.assertTrue(result["is_hallucinated"])

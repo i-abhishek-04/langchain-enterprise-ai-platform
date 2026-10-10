@@ -1,27 +1,25 @@
-# Enterprise AI Engineering Platform Architecture & Operational Guidelines (v2.4)
+# Document Q&A Platform: Current Implementation
 
-## 1. System Overview & Core Capabilities
-The Enterprise AI Engineering Platform is designed for high-throughput, low-latency agentic workflows and retrieval-augmented generation (RAG). The platform leverages LangChain LCEL for component composition, LangGraph for stateful multi-agent orchestration, Qdrant for dense vector retrieval, and PostgreSQL for telemetry and observability.
+This sample document describes the current repository implementation, not a production deployment or service-level commitment.
 
-## 2. High Availability & Service Level Agreements (SLAs)
-- **Target Uptime:** 99.95% availability across production deployments.
-- **Maximum Retrieval Latency:** Sub-50 milliseconds for Qdrant vector similarity search queries.
-- **Maximum End-to-End Latency:** Less than 1,500 milliseconds for 4-agent LangGraph workflow execution.
-- **Token Throughput:** Supported up to 120 tokens per second using free-tier acceleration engines (Groq Cloud Llama 3.3 70B & Google Gemini 2.0 Flash).
+## Backend workflow
 
-## 3. Security, Compliance & Guardrails Policy
-All incoming queries and documents must pass through automated Python security middleware prior to processing:
-1. **PII Masking:** Personally Identifiable Information (PII) including email addresses, telephone numbers, Social Security Numbers (SSN), and credit card numbers are automatically masked with placeholders (`[MASKED_EMAIL]`, `[MASKED_PHONE]`, `[MASKED_SSN]`).
-2. **Prompt Injection & Jailbreak Defense:** System prompt overrides, role-reversal attacks, and DAN-mode bypasses trigger an immediate HTTP 400 rejection and flag an event in PostgreSQL observability logs.
-3. **Context Boundary Enforcement:** The Verification Agent evaluates answer faithfulness against retrieved Qdrant context. If the confidence score drops below 0.65, the system responds with: *"I don't have enough information."*
+The FastAPI backend runs a compiled LangGraph `StateGraph` with four sequential nodes:
 
-## 4. Multi-Agent Orchestration Workflow (LangGraph)
-The platform executes queries through a stateful 4-agent graph:
-- **Agent 1 (Document Processing):** Performs content cleaning, chunking (500 tokens, 50 overlap), and PII sanitization.
-- **Agent 2 (Retriever Agent):** Generates 384-dimensional dense embeddings and queries Qdrant for top-k relevant document chunks.
-- **Agent 3 (Reasoning Agent):** Synthesizes grounded answers strictly constrained to retrieved context using free-tier LLM backends.
-- **Agent 4 (Verification Agent):** Verifies citations, calculates hallucination scores, and enforces final response safety.
+1. Document processing validates and sanitizes the query.
+2. Retrieval searches Qdrant, with an in-memory lexical fallback.
+3. Reasoning runs a LangChain LCEL chain using `ChatPromptTemplate`, `ChatOpenAI`, and `StrOutputParser` for Groq. When a live model call is unavailable, the backend returns retrieved passages without synthesizing an answer.
+4. Verification calculates a heuristic confidence score from retrieved context and response text. It is not an independent model-based fact checker.
 
-## 5. Storage Architecture
-- **Qdrant Vector Database:** Stores dense vector embeddings and metadata payloads (`filename`, `page`, `chunk_id`).
-- **PostgreSQL Database:** Persists `users`, `documents`, `chat_history`, and `evaluation_logs`.
+## Retrieval limitations
+
+Qdrant stores 384-dimensional FastEmbed `sentence-transformers/all-MiniLM-L6-v2` vectors. Retrieval combines semantic similarity with BM25-style keyword ranking. The current implementation loads document text into backend memory for keyword ranking. The embedding model downloads on first use and is cached persistently in Docker Compose.
+
+On startup, chunks from the legacy `enterprise_documents` Qdrant collection are re-embedded into `enterprise_documents_v2`. The old collection is retained.
+
+## Other components
+
+- The API accepts PDF, DOCX, TXT, and Markdown uploads.
+- The React playground calls Groq, OpenRouter, and local Ollama directly. Other configured selections use a local simulation.
+- SQLAlchemy persists application records. Docker Compose configures PostgreSQL; local configuration defaults to SQLite.
+- Reported token counts, costs, and confidence values are estimates or heuristics, not provider billing data or independent factuality measurements.

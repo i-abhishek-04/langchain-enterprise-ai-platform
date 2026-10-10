@@ -16,27 +16,27 @@ export default function ChainVisualizer({ selectedProvider, selectedModel }) {
     },
     {
       id: 'prompt',
-      title: '2. ChatPromptTemplate',
-      type: 'LangChain Core Component',
+      title: '2. Prompt Formatting',
+      type: 'Illustrative step',
       icon: Box,
       color: 'var(--accent-cyan)',
-      details: 'Formats System Instructions + User Input payload into standard messages format.'
+      details: 'A LangChain ChatPromptTemplate can format system instructions and user input as messages.'
     },
     {
       id: 'model',
       title: `3. ${provider.name}`,
-      type: `Free Model (${selectedModel})`,
+      type: `Provider or simulator (${selectedModel})`,
       icon: Cpu,
       color: 'var(--accent-purple)',
-      details: `Executes LLM inference via ${provider.badge}. Zero cost per token.`
+      details: `${provider.name}: this browser app calls configured providers directly; the local simulator does not call a model.`
     },
     {
       id: 'parser',
-      title: '4. StrOutputParser',
-      type: 'LangChain Output Parser',
+      title: '4. Text Output',
+      type: 'Illustrative step',
       icon: Layers,
       color: 'var(--accent-amber)',
-      details: 'Extracts message content string from raw LLM Response object.'
+      details: 'A LangChain StrOutputParser can extract text from a model response.'
     },
     {
       id: 'output',
@@ -44,7 +44,7 @@ export default function ChainVisualizer({ selectedProvider, selectedModel }) {
       type: 'Clean Output',
       icon: CheckCircle2,
       color: 'var(--accent-emerald)',
-      details: 'Returned text ready for client rendering or downstream agent tools.'
+      details: 'Text shown in the playground output panel.'
     }
   ];
 
@@ -55,10 +55,10 @@ export default function ChainVisualizer({ selectedProvider, selectedModel }) {
       <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
           <Workflow size={24} color="var(--accent-blue)" />
-          <h2 style={{ fontSize: '1.2rem', color: 'var(--text-primary)' }}>LangChain LCEL Chain Visualizer</h2>
+          <h2 style={{ fontSize: '1.2rem', color: 'var(--text-primary)' }}>Illustrative LCEL Flow</h2>
         </div>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-          Interactive visualization of the LangChain Expression Language (<code className="font-mono">prompt | model | parser</code>) execution pipeline using the currently configured free model engine.
+          This diagram is illustrative and does not execute an LCEL chain. The browser playground calls supported providers directly; the backend document Q&A endpoint uses LangChain LCEL for Groq.
         </p>
       </div>
 

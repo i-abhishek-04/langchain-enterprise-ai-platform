@@ -5,17 +5,18 @@ build-backend = "hatchling.build"
 [project]
 name = "enterprise-ai-api"
 version = "1.0.0"
-description = "FastAPI Enterprise AI Engineering Backend with LangChain, LangGraph, Qdrant, and PostgreSQL"
+description = "FastAPI document Q&A backend using LangGraph, LangChain, Qdrant, and SQLAlchemy"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
     "pydantic>=2.7.0",
     "pydantic-settings>=2.2.1",
-    "langchain>=0.3.0",
     "langchain-core>=0.3.0",
+    "langchain-openai>=0.2.0",
     "langgraph>=0.2.0",
-    "qdrant-client>=1.8.0",
+    "fastembed>=0.7.0",
+    "qdrant-client>=1.10.0",
     "sqlalchemy>=2.0.0",
     "psycopg2-binary>=2.9.9",
     "python-jose[cryptography]>=3.3.0",
@@ -32,3 +33,6 @@ dev-dependencies = [
     "pytest>=8.0.0",
     "httpx>=0.27.0"
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

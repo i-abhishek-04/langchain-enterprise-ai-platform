@@ -19,9 +19,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
         uvicorn \
         pydantic \
         pydantic-settings \
-        langchain \
         langchain-core \
+        langchain-openai \
         langgraph \
+        fastembed \
         qdrant-client \
         sqlalchemy \
         psycopg2-binary \

@@ -36,11 +36,11 @@ export default function Header({
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '1.25rem', color: 'var(--text-primary)' }}>LangChain Enterprise Platform</h1>
-              <span className="badge badge-free">Enterprise RAG & LangGraph</span>
+              <h1 style={{ fontSize: '1.25rem', color: 'var(--text-primary)' }}>AI Document Q&amp;A Playground</h1>
+              <span className="badge badge-free">LangGraph + LangChain backend</span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Interactive Multi-Agent Studio, Qdrant Vector Engine & Observability
+              Document Q&amp;A, direct provider calls, and local prompt simulation
             </p>
           </div>
         </div>
@@ -60,7 +60,7 @@ export default function Header({
             onClick={() => setActiveTab('rag')}
             style={{ border: 'none' }}
           >
-            <Database size={14} /> Enterprise RAG
+            <Database size={14} /> Document Q&amp;A
           </button>
 
           <button
@@ -68,7 +68,7 @@ export default function Header({
             onClick={() => setActiveTab('agents')}
             style={{ border: 'none' }}
           >
-            <Bot size={14} /> LangGraph 4-Agent
+            <Bot size={14} /> LangGraph Workflow
           </button>
 
           <button
@@ -84,7 +84,7 @@ export default function Header({
             onClick={() => setActiveTab('visualizer')}
             style={{ border: 'none' }}
           >
-            <Network size={14} /> LCEL Flow
+            <Network size={14} /> LCEL Diagram
           </button>
 
           <button

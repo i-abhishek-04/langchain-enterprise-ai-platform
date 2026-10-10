@@ -23,7 +23,13 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres_password@postgres:5432/enterprise_ai
       - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=enterprise_documents_v2
+      - LEGACY_QDRANT_COLLECTION=enterprise_documents
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - EMBEDDING_CACHE_DIR=/root/.cache/fastembed
       - SECRET_KEY=enterprise-super-secret-key-32-chars-long-x98z
+    volumes:
+      - fastembed_cache:/root/.cache/fastembed
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,3 +67,4 @@ services:
 volumes:
   postgres_data:
   qdrant_data:
+  fastembed_cache:

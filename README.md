@@ -144,6 +144,15 @@ The browser displays a minimal login/register form and keeps its access token in
 
 For local setup, set `SECRET_KEY` to a unique random value in the backend process environment. If unset, the API generates an ephemeral random key and existing tokens become invalid after a server restart. Set `ADMIN_EMAIL` to the exact email address that should receive the first administrator role, then register that address. For Docker Compose, use `environment/.env` as shown above. Authentication rate limits are in-memory and per process, so production deployments with multiple workers should also enforce limits at a shared proxy or gateway.
 
+### Render deployment (Docker)
+
+Render deploys each web service separately; it does not deploy this Compose stack as one service. Create two **Docker** web services from the repository:
+
+1. **API:** Dockerfile path `apps/enterprise-api/Dockerfile`; set `SECRET_KEY`, `DATABASE_URL`, `QDRANT_URL`, `ADMIN_EMAIL`, and `ALLOWED_ORIGINS`. Use Render-managed PostgreSQL and a persistent/managed Qdrant endpoint for production; the default SQLite database and local Qdrant fallback are not durable across service replacement.
+2. **Frontend:** Dockerfile path `apps/free-ai-playground/Dockerfile`; set build argument `VITE_API_BASE_URL` to the API's public URL ending in `/api/v1`, such as `https://your-api.onrender.com/api/v1`.
+
+The containers listen on Render's `PORT` environment variable. `VITE_API_BASE_URL` is embedded into the frontend at image build time, so changing it requires a frontend redeploy. Set `ALLOWED_ORIGINS` on the API to the deployed frontend origin (scheme and hostname, no path). Do not use `localhost` for the API URL in a deployed browser.
+
 ---
 
 ## 📡 API Reference

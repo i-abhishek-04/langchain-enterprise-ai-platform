@@ -46,6 +46,10 @@ The backend compiles four Python processing steps into a sequential **LangGraph 
 * **PII Masking:** Query sanitization masks detected emails, phone numbers, and SSNs.
 * **Prompt Injection Detection:** Checks query text against configured injection patterns.
 * **CORS & HTTP Security Headers:** Enforces `nosniff`, `DENY` framing, and restricted origin policies.
+* **Authentication:** API endpoints require a bearer token; telemetry and admin statistics require an administrator account.
+* **Rate limiting:** Login and registration are limited per client IP in each API process. Use a shared gateway limiter when deploying multiple workers or instances.
+
+Email addresses, phone numbers, dashed SSNs, and credit-card-like numbers are masked from queries. **SSNs written without dashes are not masked.** These regex-based checks are best-effort and are not comprehensive PII or prompt-injection protection.
 
 ### 📊 4. Telemetry & Admin Dashboard
 * **Query Latency Tracking:** Records total workflow latency.
@@ -90,9 +94,16 @@ The browser playground is a separate client-side app. Its chain visualizer is il
 ### Option A: Docker Compose (Recommended)
 Launch the full stack (Frontend + Backend + PostgreSQL + Qdrant) in one command:
 
-```bash
-docker-compose up --build
+```powershell
+Copy-Item environment/.env.example environment/.env
 ```
+
+Edit `environment/.env`: set unique `POSTGRES_PASSWORD` and `SECRET_KEY` values, update `DATABASE_URL` to use the same database password, and set `ADMIN_EMAIL` to the email that will register as the first administrator. Then launch:
+
+```bash
+docker compose up --build
+```
+`environment/.env` is ignored by Git and holds Compose secrets/configuration. Register the address configured as `ADMIN_EMAIL` to create the initial admin; only that exact email is promoted. Set `ADMIN_EMAIL` before that account registers.
 * **Frontend Playground:** `http://localhost:3000`
 * **FastAPI Backend:** `http://localhost:8000`
 * **Interactive Swagger Docs:** `http://localhost:8000/docs`
@@ -112,6 +123,7 @@ cd apps/enterprise-api
 pip install -e .
 
 # Start FastAPI server
+# Set SECRET_KEY and, optionally, ADMIN_EMAIL in the process environment first.
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -126,6 +138,12 @@ npm install
 npm run dev
 ```
 
+### Authentication notes
+
+The browser displays a minimal login/register form and keeps its access token in React memory only. The token is lost on refresh or when the tab closes, so the user must sign in again; unlike `localStorage`, it is not persisted between page loads. In-memory storage is still accessible to JavaScript running on the page and is not an XSS defense.
+
+For local setup, set `SECRET_KEY` to a unique random value in the backend process environment. If unset, the API generates an ephemeral random key and existing tokens become invalid after a server restart. Set `ADMIN_EMAIL` to the exact email address that should receive the first administrator role, then register that address. For Docker Compose, use `environment/.env` as shown above. Authentication rate limits are in-memory and per process, so production deployments with multiple workers should also enforce limits at a shared proxy or gateway.
+
 ---
 
 ## 📡 API Reference
@@ -133,12 +151,16 @@ npm run dev
 | Endpoint | Method | Description |
 |---|---|---|
 | `GET /` | `GET` | System health check & version info |
+| `POST /api/v1/auth/register` | `POST` | Register and receive a bearer token |
+| `POST /api/v1/auth/login` | `POST` | Authenticate and receive a bearer token |
 | `POST /api/v1/chat` | `POST` | Execute 4-Agent RAG Pipeline with query payload |
 | `POST /api/v1/documents/upload` | `POST` | Upload & chunk document into Qdrant vector store |
 | `GET /api/v1/documents` | `GET` | List all indexed enterprise documents |
 | `DELETE /api/v1/documents/{id}` | `DELETE` | Delete document & remove chunks from vector store |
 | `GET /api/v1/metrics` | `GET` | Fetch telemetry, latency, token metrics, and agent logs |
 | `GET /api/v1/admin/stats` | `GET` | Admin dashboard overview statistics |
+
+All API endpoints other than login and registration require `Authorization: Bearer <access_token>`. History is scoped to the authenticated account even when a session ID is supplied. Metrics and admin statistics require an administrator account.
 
 ---
 
@@ -148,6 +170,9 @@ Run the full automated platform and bug regression test suites:
 
 ```bash
 cd apps/enterprise-api
+
+# Full backend regression suite, including auth, rate limits, and user-scoped history
+python -m pytest
 
 # Backend Test Suite
 python -c "import sys; sys.path.insert(0, '.'); import unittest; unittest.main(module='tests.run_tests')"

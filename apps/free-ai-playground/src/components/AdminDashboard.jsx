@@ -10,15 +10,7 @@ export default function AdminDashboard() {
   const loadData = async () => {
     setLoading(true);
     const [s, m] = await Promise.all([fetchAdminStatsApi(), fetchMetricsApi()]);
-    setStats(s || {
-      active_documents: 1,
-      total_queries_processed: 12,
-      avg_latency_ms: 340.5,
-      hallucination_count: 0,
-      guardrail_flags_count: 1,
-      active_users: 1,
-      most_used_model: "Llama 3.3 70B (Groq Free)"
-    });
+    setStats(s);
     setMetrics(m);
     setLoading(false);
   };
@@ -49,7 +41,7 @@ export default function AdminDashboard() {
 
       {/* Metric Cards Row */}
       {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '16px' }}>
           
           <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid var(--accent-blue)' }}>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total Queries</div>
@@ -77,7 +69,20 @@ export default function AdminDashboard() {
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>Filtered by Verifier</div>
           </div>
 
+          <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid var(--accent-cyan)' }}>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Active Users</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-primary)' }}>{stats.active_users}</div>
+          </div>
+
+          <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid var(--accent-amber)' }}>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Most Used Model</div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{stats.most_used_model || 'No usage yet'}</div>
+          </div>
+
         </div>
+      )}
+      {!loading && !stats && (
+        <p style={{ color: 'var(--text-secondary)' }}>Admin statistics are currently unavailable.</p>
       )}
 
       {/* Observability Logs Table */}

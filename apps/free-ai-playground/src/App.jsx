@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Header from './components/Header';
+import AuthScreen from './components/AuthScreen';
 import Playground from './components/Playground';
 import DocumentUpload from './components/DocumentUpload';
 import AgentGraphVisualizer from './components/AgentGraphVisualizer';
@@ -8,9 +9,11 @@ import ChainVisualizer from './components/ChainVisualizer';
 import PromptLibrary from './components/PromptLibrary';
 import ProviderModal from './components/ProviderModal';
 import { PROVIDERS } from './services/aiProviders';
+import { setApiAccessToken, setUnauthorizedHandler } from './services/apiClient';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('playground'); // 'playground' | 'rag' | 'agents' | 'admin' | 'visualizer' | 'library'
+  const [auth, setAuth] = useState(null);
   const [selectedProvider, setSelectedProvider] = useState('groq');
   const [selectedModel, setSelectedModel] = useState(PROVIDERS.groq.models[0].id);
 
@@ -27,6 +30,23 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activePromptTemplate, setActivePromptTemplate] = useState(null);
 
+  useEffect(() => {
+    setApiAccessToken(auth?.access_token || null);
+  }, [auth]);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setAuth(null);
+      setActiveTab('playground');
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  const handleAuthenticated = (result) => {
+    setApiAccessToken(result.access_token);
+    setAuth(result);
+  };
+
   const handleSaveKey = (providerId, key) => {
     const updated = { ...apiKeys, [providerId]: key };
     setApiKeys(updated);
@@ -42,7 +62,10 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      
+      {!auth ? (
+        <AuthScreen onAuthenticated={handleAuthenticated} />
+      ) : (
+        <>
       {/* Header Navigation */}
       <Header
         activeTab={activeTab}
@@ -53,6 +76,13 @@ export default function App() {
         setSelectedModel={setSelectedModel}
         onOpenSettings={() => setIsSettingsOpen(true)}
         apiKeys={apiKeys}
+        isAdmin={auth.user.is_admin}
+        userEmail={auth.user.email}
+        onLogout={() => {
+          setApiAccessToken(null);
+          setAuth(null);
+          setActiveTab('playground');
+        }}
       />
 
       {/* Main View Area */}
@@ -79,7 +109,7 @@ export default function App() {
           <AgentGraphVisualizer />
         )}
 
-        {activeTab === 'admin' && (
+        {activeTab === 'admin' && auth.user.is_admin && (
           <AdminDashboard />
         )}
 
@@ -114,7 +144,8 @@ export default function App() {
       }}>
         Document Q&amp;A Playground • FastAPI, LangGraph, LangChain, and Qdrant
       </footer>
-
+        </>
+      )}
     </div>
   );
 }

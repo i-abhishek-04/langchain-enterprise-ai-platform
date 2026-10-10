@@ -10,7 +10,10 @@ export default function Header({
   selectedModel,
   setSelectedModel,
   onOpenSettings,
-  apiKeys
+  apiKeys,
+  isAdmin,
+  userEmail,
+  onLogout
 }) {
   const currentProviderConfig = PROVIDERS[selectedProvider];
   const hasKey = currentProviderConfig?.apiKeyRequired ? Boolean(apiKeys[selectedProvider]) : true;
@@ -71,13 +74,13 @@ export default function Header({
             <Bot size={14} /> LangGraph Workflow
           </button>
 
-          <button
+          {isAdmin && <button
             className={`btn btn-sm ${activeTab === 'admin' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setActiveTab('admin')}
             style={{ border: 'none' }}
           >
             <Activity size={14} /> Admin & Eval
-          </button>
+          </button>}
 
           <button
             className={`btn btn-sm ${activeTab === 'visualizer' ? 'btn-primary' : 'btn-outline'}`}
@@ -98,6 +101,7 @@ export default function Header({
 
         {/* Provider Controls & API Key Button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{userEmail}</span>
           
           {/* Provider Select */}
           <select
@@ -152,6 +156,10 @@ export default function Header({
                 }}
               />
             )}
+          </button>
+
+          <button className="btn btn-outline btn-sm" onClick={onLogout}>
+            Log out
           </button>
 
         </div>

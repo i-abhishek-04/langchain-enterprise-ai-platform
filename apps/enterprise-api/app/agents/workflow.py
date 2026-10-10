@@ -234,7 +234,7 @@ def run_verification_agent(state: AgentState) -> AgentState:
     state["confidence_score"] = score
     state["is_hallucinated"] = not is_faithful
 
-    if score < 0.30 and state.get("context_text"):
+    if not is_faithful:
         state["final_response"] = "Information not found in indexed enterprise documents."
         state["agent_logs"].append(f"[Agent 4: Verification Agent] Low confidence score ({score}). Hallucination check FAILED.")
     else:

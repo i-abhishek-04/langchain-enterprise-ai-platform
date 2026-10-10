@@ -1,4 +1,5 @@
 import sys
+import os
 import unittest
 from unittest.mock import patch
 from langchain_core.messages import AIMessage
@@ -9,11 +10,15 @@ from app.guardrails.security import validate_input, mask_pii, detect_prompt_inje
 from app.rag.ingestion import process_and_index_document
 from app.rag.vectorstore import upsert_chunks, search_similar_chunks, _in_memory_docs
 from app.agents.workflow import agent_graph, execute_multi_agent_pipeline
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from auth_helpers import create_test_auth
 
 class TestEnterprisePlatform(unittest.TestCase):
 
     def setUp(self):
         self.client = TestClient(app)
+        self.user_headers, _, _ = create_test_auth()
+        self.admin_headers, _, _ = create_test_auth(is_admin=True)
         _in_memory_docs.clear()
         
         # Populate sample docs for retrieval test
@@ -134,7 +139,7 @@ class TestEnterprisePlatform(unittest.TestCase):
 
     # 4. REST API Endpoint Tests
     def test_api_metrics_endpoint(self):
-        response = self.client.get("/api/v1/metrics")
+        response = self.client.get("/api/v1/metrics", headers=self.admin_headers)
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("summary", data)
@@ -142,7 +147,7 @@ class TestEnterprisePlatform(unittest.TestCase):
         print(" [PASS] REST API: /metrics Endpoint Test")
 
     def test_api_admin_stats_endpoint(self):
-        response = self.client.get("/api/v1/admin/stats")
+        response = self.client.get("/api/v1/admin/stats", headers=self.admin_headers)
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("active_documents", data)
@@ -156,7 +161,7 @@ class TestEnterprisePlatform(unittest.TestCase):
             "provider_id": "browser",
             "model_id": "langchain-agent-sim"
         }
-        response = self.client.post("/api/v1/chat", json=payload)
+        response = self.client.post("/api/v1/chat", json=payload, headers=self.user_headers)
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("response", data)

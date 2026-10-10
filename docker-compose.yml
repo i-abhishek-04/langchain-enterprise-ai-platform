@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. React + Vite Frontend App
   frontend:
@@ -20,14 +18,11 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - ./environment/.env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres_password@postgres:5432/enterprise_ai
       - QDRANT_URL=http://qdrant:6333
-      - QDRANT_COLLECTION=enterprise_documents_v2
-      - LEGACY_QDRANT_COLLECTION=enterprise_documents
-      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
       - EMBEDDING_CACHE_DIR=/root/.cache/fastembed
-      - SECRET_KEY=enterprise-super-secret-key-32-chars-long-x98z
     volumes:
       - fastembed_cache:/root/.cache/fastembed
     depends_on:
@@ -40,16 +35,12 @@ services:
   postgres:
     image: postgres:15-alpine
     restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_password
-      POSTGRES_DB: enterprise_ai
-    ports:
-      - "5432:5432"
+    env_file:
+      - ./environment/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5

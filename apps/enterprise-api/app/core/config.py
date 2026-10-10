@@ -1,4 +1,5 @@
 import os
+import secrets
 
 try:
     from pydantic_settings import BaseSettings
@@ -11,9 +12,10 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     API_V1_STR: str = "/api/v1"
 
     # JWT Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "enterprise-super-secret-key-32-chars-long-x98z")
+    SECRET_KEY: str = os.getenv("SECRET_KEY") or secrets.token_urlsafe(48)
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 # 24 hours
+    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "").strip().lower()
 
     # Database (PostgreSQL or SQLite fallback)
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./enterprise_ai.db")

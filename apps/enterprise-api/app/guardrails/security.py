@@ -3,7 +3,7 @@ from typing import Dict, Any, Tuple, List
 
 # Common prompt injection & jailbreak keywords / patterns
 INJECTION_PATTERNS = [
-    r"ignore (?:all )?previous instructions",
+    r"ignore (?:(?:all|the) )?previous instructions?",
     r"ignore all instructions",
     r"disregard system prompt",
     r"you are now in DAN mode",
@@ -15,7 +15,7 @@ INJECTION_PATTERNS = [
 
 # PII Regex Patterns
 PII_PATTERNS = {
-    "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
+    "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
     "phone": r"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b",
     "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
     "credit_card": r"\b(?:\d[ -]*?){13,16}\b"
@@ -23,9 +23,9 @@ PII_PATTERNS = {
 
 def detect_prompt_injection(user_input: str) -> Tuple[bool, str]:
     """Check for prompt injection and jailbreak patterns."""
-    lowered = user_input.lower()
+    normalized = re.sub(r"\s+", " ", user_input).strip()
     for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, lowered):
+        if re.search(pattern, normalized, re.IGNORECASE):
             return True, f"Security Warning: Potential prompt injection detected matching pattern '{pattern}'."
     return False, ""
 
@@ -82,18 +82,21 @@ def calculate_dynamic_confidence(
     response_words = [w for w in re.findall(r"\w+", response_text.lower()) if len(w) > 3]
     
     if not response_words:
-        overlap_comp = 0.20
+        overlap_ratio = 0.0
+        overlap_comp = 0.0
     else:
         matched = sum(1 for w in response_words if w in context_words)
-        ratio = matched / len(response_words)
-        overlap_comp = round(ratio * 0.45, 2)
+        overlap_ratio = matched / len(response_words)
+        overlap_comp = round(overlap_ratio * 0.45, 2)
 
     # 3. Density / Chunk Count Component (max 0.15)
     density_comp = min(0.15, len(retrieved_chunks) * 0.04)
 
     # Total Score Calculation (bounded between 0.0 and 0.98)
     computed_score = round(max(0.10, min(0.98, retrieval_comp + overlap_comp + density_comp)), 2)
-    is_faithful = computed_score >= 0.50
+    if overlap_ratio == 0:
+        computed_score = min(computed_score, 0.29)
+    is_faithful = computed_score >= 0.30
 
     return is_faithful, computed_score
 

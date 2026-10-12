@@ -1,4 +1,4 @@
-# AI Document Q&A and Model Playground
+# LangGraph RAG Prototype
 
 <div align="center">
 
@@ -248,7 +248,7 @@ python -c "import sys; sys.path.insert(0, '.'); import unittest; unittest.main(m
 
 **Abhishek**
 * **GitHub:** [@i-abhishek-04](https://github.com/i-abhishek-04)
-* **Project:** AI Document Q&A and Model Playground
+* **Project:** LangGraph RAG Prototype
 
 ---
 

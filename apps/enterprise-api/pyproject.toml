@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "enterprise-ai-api"
+name = "langgraph-rag-prototype-api"
 version = "1.0.0"
 description = "A prototype RAG service with FastAPI, a four-node LangGraph pipeline, LCEL-based generation via Groq, and hybrid Qdrant retrieval with PII and injection guardrails."
 requires-python = ">=3.10"

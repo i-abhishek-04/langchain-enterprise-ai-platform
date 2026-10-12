@@ -9,7 +9,7 @@ except ImportError:
     model_validator = None
 
 class Settings(BaseSettings if BaseSettings is not object else object):
-    PROJECT_NAME: str = "AI Document Q&A API"
+    PROJECT_NAME: str = "LangGraph RAG Prototype API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 

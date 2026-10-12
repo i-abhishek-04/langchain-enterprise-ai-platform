@@ -39,7 +39,7 @@ export default function Header({
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '1.25rem', color: 'var(--text-primary)' }}>AI Document Q&amp;A Playground</h1>
+              <h1 style={{ fontSize: '1.25rem', color: 'var(--text-primary)' }}>LangGraph RAG Prototype</h1>
               <span className="badge badge-free">LangGraph + LangChain backend</span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>

@@ -10,16 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+COPY pyproject.toml .
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    python -c "import tomllib, subprocess, sys; deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']; sys.exit(subprocess.call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir'] + deps))"
+
 COPY . .
 
-RUN if [ -f pyproject.toml ]; then \
-        pip install --no-cache-dir --upgrade pip && \
-        pip install --no-cache-dir . "psycopg[binary]>=3.2.0" "psycopg2-binary>=2.9.9"; \
-    elif [ -f apps/enterprise-api/pyproject.toml ]; then \
-        pip install --no-cache-dir --upgrade pip && \
-        pip install --no-cache-dir ./apps/enterprise-api "psycopg[binary]>=3.2.0" "psycopg2-binary>=2.9.9" && \
-        cp -rn apps/enterprise-api/* . 2>/dev/null || true; \
-    fi && \
+RUN pip install --no-cache-dir --no-deps . && \
     python -c "import psycopg"
 
 EXPOSE 8000

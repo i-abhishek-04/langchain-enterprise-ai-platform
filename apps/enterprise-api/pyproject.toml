@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "enterprise-ai-api"
 version = "1.0.0"
-description = "FastAPI document Q&A backend using LangGraph, LangChain, Qdrant, and SQLAlchemy"
+description = "A prototype RAG service with FastAPI, a four-node LangGraph pipeline, LCEL-based generation via Groq, and hybrid Qdrant retrieval with PII and injection guardrails."
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110.0",
@@ -20,7 +20,6 @@ dependencies = [
     "qdrant-client>=1.10.0",
     "sqlalchemy>=2.0.0",
     "psycopg[binary]>=3.2.0",
-    "psycopg2-binary>=2.9.9",
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "python-multipart>=0.0.9",

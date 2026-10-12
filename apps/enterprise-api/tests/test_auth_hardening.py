@@ -189,3 +189,12 @@ def test_upload_handler_is_sync_and_does_not_expose_internal_errors():
     assert response.status_code == 500
     assert response.json()["detail"] == "Document ingestion failed. Please try again later."
     assert "private filesystem path" not in response.text
+
+
+def test_missing_secret_key_raises_error():
+    import pytest
+    from app.core.config import Settings
+
+    with patch.dict(os.environ, {"SECRET_KEY": ""}, clear=False):
+        with pytest.raises(RuntimeError, match="SECRET_KEY environment variable is required"):
+            Settings()

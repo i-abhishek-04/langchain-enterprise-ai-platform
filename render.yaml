@@ -12,8 +12,10 @@ services:
         value: 8000
       - key: SECRET_KEY
         generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
       - key: ALLOWED_ORIGINS
-        value: "*"
+        value: https://enterprise-ai-frontend.onrender.com
       - key: DATABASE_URL
         value: sqlite:///./enterprise_ai.db
       - key: QDRANT_URL

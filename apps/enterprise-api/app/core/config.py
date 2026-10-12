@@ -3,8 +3,10 @@ import secrets
 
 try:
     from pydantic_settings import BaseSettings
+    from pydantic import model_validator
 except ImportError:
     BaseSettings = object
+    model_validator = None
 
 class Settings(BaseSettings if BaseSettings is not object else object):
     PROJECT_NAME: str = "AI Document Q&A API"
@@ -12,7 +14,7 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     API_V1_STR: str = "/api/v1"
 
     # JWT Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY") or secrets.token_urlsafe(48)
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 # 24 hours
     ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "").strip().lower()
@@ -37,9 +39,30 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     )
 
     # Free Tier AI Keys
+    ALLOW_SERVER_KEY: bool = os.getenv("ALLOW_SERVER_KEY", "false").strip().lower() in {"true", "1", "yes"}
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    if model_validator is not None:
+        @model_validator(mode="after")
+        def _validate_secret_key(self):
+            key = (getattr(self, "SECRET_KEY", None) or os.getenv("SECRET_KEY", "")).strip()
+            if not key:
+                raise RuntimeError(
+                    "SECRET_KEY environment variable is required and must not be empty."
+                )
+            self.SECRET_KEY = key
+            return self
+    else:
+        def __init__(self, **values):
+            super().__init__(**values)
+            key = (getattr(self, "SECRET_KEY", None) or os.getenv("SECRET_KEY", "")).strip()
+            if not key:
+                raise RuntimeError(
+                    "SECRET_KEY environment variable is required and must not be empty."
+                )
+            self.SECRET_KEY = key
 
 settings = Settings()

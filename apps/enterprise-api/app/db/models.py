@@ -12,7 +12,7 @@ class User(Base):
     full_name = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 class DocumentRecord(Base):
     __tablename__ = "documents"
@@ -22,7 +22,7 @@ class DocumentRecord(Base):
     file_type = Column(String, nullable=False)
     file_size_bytes = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
-    uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
+    uploaded_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     status = Column(String, default="INDEXED") # INDEXED, PROCESSING, FAILED
 
 class ChatHistory(Base):
@@ -35,7 +35,7 @@ class ChatHistory(Base):
     bot_response = Column(Text, nullable=False)
     provider_id = Column(String, default="groq")
     model_id = Column(String, default="llama-3.3-70b-versatile")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 class EvaluationLog(Base):
     __tablename__ = "evaluation_logs"
@@ -55,4 +55,4 @@ class EvaluationLog(Base):
     is_hallucinated = Column(Boolean, default=False)
     provider_id = Column(String, default="groq")
     model_id = Column(String, default="llama-3.3-70b-versatile")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))

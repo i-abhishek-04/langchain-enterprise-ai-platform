@@ -35,11 +35,10 @@ env_origins = os.getenv("ALLOWED_ORIGINS", "")
 if env_origins:
     ALLOWED_ORIGINS.extend([origin.strip() for origin in env_origins.split(",") if origin.strip()])
 
-# CORS Security Middleware (Allows Vercel and Render domains & configured origins)
+# CORS Security Middleware (Explicit ALLOWED_ORIGINS list only)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https://.*(\.vercel\.app|\.onrender\.com)",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Requested-With"],

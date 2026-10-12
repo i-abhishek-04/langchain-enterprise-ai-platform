@@ -67,13 +67,20 @@ def _remember_docs(docs: Sequence[Dict[str, Any]]) -> None:
             known.add(key)
 
 
+_qdrant_client = None
+
+
 def get_qdrant_client():
+    global _qdrant_client
     if QdrantClient is None:
         return None
+    if _qdrant_client is not None:
+        return _qdrant_client
     try:
         client = QdrantClient(url=settings.QDRANT_URL, timeout=2.0)
         client.get_collections()
-        return client
+        _qdrant_client = client
+        return _qdrant_client
     except Exception as exc:
         logger.warning("Qdrant unavailable; using in-memory lexical retrieval: %s", exc)
         return None
@@ -174,7 +181,10 @@ def upsert_chunks(chunks: List[Dict[str, Any]]) -> int:
         vectors = embed_texts([doc["text"] for doc in docs])
         points = [
             qmodels.PointStruct(
-                id=uuid.uuid4().hex,
+                id=uuid.uuid5(
+                    uuid.NAMESPACE_DNS,
+                    f"{doc['filename']}:{doc.get('chunk_id', 0)}:{doc['text']}"
+                ).hex,
                 vector=vector,
                 payload=doc,
             )
@@ -184,6 +194,37 @@ def upsert_chunks(chunks: List[Dict[str, Any]]) -> int:
 
     _remember_docs(docs)
     return len(docs)
+
+
+def delete_document_chunks(filename: str, doc_id: Optional[str] = None) -> int:
+    """Delete document chunks from Qdrant by filename and remove them from in-memory storage."""
+    global _in_memory_docs
+    initial_count = len(_in_memory_docs)
+    _in_memory_docs[:] = [
+        doc
+        for doc in _in_memory_docs
+        if doc.get("filename") != filename
+    ]
+    removed_count = initial_count - len(_in_memory_docs)
+
+    client = get_qdrant_client()
+    if client is not None and qmodels is not None:
+        try:
+            client.delete(
+                collection_name=settings.QDRANT_COLLECTION,
+                points_selector=qmodels.Filter(
+                    must=[
+                        qmodels.FieldCondition(
+                            key="filename",
+                            match=qmodels.MatchValue(value=filename),
+                        )
+                    ]
+                ),
+            )
+        except Exception as exc:
+            logger.error("Failed to delete points from Qdrant for %s: %s", filename, exc)
+
+    return removed_count
 
 
 def _terms(text: str) -> List[str]:

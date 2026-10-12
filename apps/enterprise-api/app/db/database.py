@@ -7,15 +7,7 @@ from app.core.config import settings
 def make_database_url(database_url: str) -> URL:
     url = make_url(database_url)
     if url.drivername in {"postgres", "postgresql"}:
-        try:
-            import psycopg  # noqa: F401
-            return url.set(drivername="postgresql+psycopg")
-        except ImportError:
-            try:
-                import psycopg2  # noqa: F401
-                return url.set(drivername="postgresql+psycopg2")
-            except ImportError:
-                return url.set(drivername="postgresql+psycopg")
+        return url.set(drivername="postgresql+psycopg")
     return url
 
 

@@ -9,15 +9,17 @@
 ![React](https://img.shields.io/badge/React-18.0+-61DAFB.svg?style=for-the-badge&logo=react)
 ![Docker](https://img.shields.io/badge/Docker-Compose--Ready-2496ED.svg?style=for-the-badge&logo=docker)
 
-**A full-stack document Q&A API and browser-based model playground**
+**A prototype RAG service with FastAPI, a four-node LangGraph pipeline, LCEL-based generation via Groq, and hybrid Qdrant retrieval with PII and injection guardrails.**
 
-[Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [API Reference](#-api-reference) • [Testing](#-testing- suite)
+[Features](#-key-features) • [Architecture](#-architecture) • [Known Limitations](#️-known-limitations) • [Quick Start](#-quick-start) • [API Reference](#-api-reference) • [Testing](#-testing-suite)
 
 </div>
 
 ---
 
 ## 🌟 Overview
+
+A prototype RAG service with FastAPI, a four-node LangGraph pipeline, LCEL-based generation via Groq, and hybrid Qdrant retrieval with PII and injection guardrails.
 
 This repository contains a React model playground and a FastAPI document Q&A service. The backend uses a compiled LangGraph workflow, LangChain's LCEL for Groq chat calls, Qdrant for document storage/search, and SQLAlchemy for application records and telemetry.
 
@@ -89,6 +91,17 @@ The browser playground is a separate client-side app. Its chain visualizer is il
 
 ---
 
+## ⚠️ Known Limitations
+
+* **Pattern-based guardrails:** PII sanitization (emails, phone numbers, SSNs, and credit cards with Luhn validation) and prompt injection detection (direct and indirect) rely on heuristic regex patterns and keyword matching. These checks provide a practical first line of defense but are not a substitute for comprehensive model-based classification or dedicated ML firewalls.
+* **Shared documents across users:** Document ingestion, chunk points in Qdrant, and keyword index memory are currently shared system-wide across all authenticated users. Multi-tenant document isolation and granular per-user document permissions are not enforced.
+* **In-memory per-process rate limit and keyword index:** Authentication rate limiting, per-user chat rate limiting (30 requests/minute), and the BM25-style keyword fallback index are maintained in API process memory. When running multiple workers or horizontal replicas, these limits and indexes are not shared across processes without an external coordinator such as Redis.
+* **Admin bootstrap by ADMIN_EMAIL:** Administrator role assignment is bootstrapped exclusively at user registration time by comparing the registering user's email to the `ADMIN_EMAIL` environment variable. Only the user registering with that exact email receives admin rights upon signup; any subsequent role elevation requires direct database intervention.
+* **Document storage as-is:** Uploaded document content (PDF, DOCX, TXT, Markdown) is parsed, embedded, and stored **as-is** in the vector store and database. Ingestion does not apply automatic PII masking or content redaction to document text; PII sanitization and prompt injection checks are enforced on user chat queries at runtime.
+* **Server LLM API Key disabled by default:** The backend requires chat callers to provide their own provider API key in the request payload (`api_key`) unless `ALLOW_SERVER_KEY=true` is set. When `ALLOW_SERVER_KEY=false` (the default), server-side keys (`GROQ_API_KEY`) are never used as a fallback for chat requests.
+
+---
+
 ## ⚡ Quick Start
 
 ### Option A: Docker Compose (Recommended)
@@ -142,11 +155,16 @@ npm run dev
 
 The browser displays a minimal login/register form and keeps its access token in React memory only. The token is lost on refresh or when the tab closes, so the user must sign in again; unlike `localStorage`, it is not persisted between page loads. In-memory storage is still accessible to JavaScript running on the page and is not an XSS defense.
 
-For local setup, set `SECRET_KEY` to a unique random value in the backend process environment. If unset, the API generates an ephemeral random key and existing tokens become invalid after a server restart. Set `ADMIN_EMAIL` to the exact email address that should receive the first administrator role, then register that address. For Docker Compose, use `environment/.env` as shown above. Authentication rate limits are in-memory and per process, so production deployments with multiple workers should also enforce limits at a shared proxy or gateway.
+For local setup, set `SECRET_KEY` to a unique secure value in the backend process environment. The API strictly requires `SECRET_KEY` and raises a clear error at startup if missing (random fallbacks are disabled). Set `ADMIN_EMAIL` to the exact email address that should receive the first administrator role, then register that address. For Docker Compose, use `environment/.env` as shown above. Authentication and chat rate limits are in-memory and per process, so production deployments with multiple workers should also enforce limits at a shared proxy or gateway.
 
 ### Render Deployment
 
 You can deploy this application on Render either using **Render Blueprints (1-Click)** or **Manual Setup**:
+
+> [!IMPORTANT]
+> **Render Demo Architecture & Storage:**
+> * **No Qdrant in Demo:** The free-tier Render demo does not run a dedicated Qdrant vector database service; the backend operates using the keyword-only in-memory search fallback for document retrieval.
+> * **Ephemeral Storage:** Render's free tier uses ephemeral filesystem storage. Any SQLite databases (`enterprise_ai.db`) and uploaded document files reset on service spindown or restart. For persistence, provision Render Managed PostgreSQL and an external managed Qdrant instance.
 
 #### Option 1: Render Blueprint (Easiest & Recommended)
 1. In your Render Dashboard, click **New +** and select **Blueprint**.
@@ -166,10 +184,12 @@ Render deploys each service independently. You can deploy both services with the
    - **Dockerfile Path:** `Dockerfile` (or `./Dockerfile`)
    - **Environment Variables:**
      - `PORT`: `8000` (Render binds automatically via `$PORT`)
-     - `SECRET_KEY`: A secure random secret string
-     - `ALLOWED_ORIGINS`: `*` or your frontend Render URL (e.g. `https://your-frontend.onrender.com`)
-     - `DATABASE_URL`: `sqlite:///./enterprise_ai.db` (or Render PostgreSQL internal URL)
-     - `QDRANT_URL`: `http://localhost:6333` (in-memory fallback is used automatically if no external Qdrant is attached)
+     - `SECRET_KEY`: A secure random secret string (mandatory; startup fails if unset)
+     - `ADMIN_EMAIL`: Email address to receive the initial administrator role upon registration
+     - `ALLOWED_ORIGINS`: Explicit frontend URL (e.g. `https://enterprise-ai-frontend.onrender.com`). Wildcards (`*`) and regex matching are disabled.
+     - `DATABASE_URL`: `sqlite:///./enterprise_ai.db` (ephemeral) or Render PostgreSQL internal URL
+     - `QDRANT_URL`: `http://localhost:6333` (in-memory keyword fallback is used automatically when no external Qdrant is connected)
+     - `ALLOW_SERVER_KEY`: `false` (default: false; set to true only if you want authenticated chat requests to use server `GROQ_API_KEY`)
 
 2. **Frontend Service (`apps/free-ai-playground`):**
    - **Option A: Static Site (Recommended — Free & No Cold Starts):**
@@ -183,7 +203,7 @@ Render deploys each service independently. You can deploy both services with the
      - **Docker Build Argument:** `VITE_API_BASE_URL=https://your-api.onrender.com/api/v1`
 
 > [!NOTE]
-> Since Vite bakes `VITE_API_BASE_URL` into static assets during build time, ensure `VITE_API_BASE_URL` is set before triggering the frontend build. The backend automatically allows `*.onrender.com` origins for CORS requests.
+> Since Vite bakes `VITE_API_BASE_URL` into static assets during build time, ensure `VITE_API_BASE_URL` is set before triggering the frontend build. Ensure `ALLOWED_ORIGINS` on the backend explicitly matches the exact frontend domain (no trailing slash).
 
 ---
 

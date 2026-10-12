@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 from math import ceil
-from typing import Optional
+from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -16,6 +16,7 @@ from app.db import models
 from app.core import security
 from app.core.config import settings
 from app.rag.ingestion import process_and_index_document
+from app.rag.vectorstore import delete_document_chunks
 from app.agents.workflow import execute_multi_agent_pipeline
 
 router = APIRouter()
@@ -25,6 +26,12 @@ AUTH_RATE_LIMIT = 10
 AUTH_RATE_WINDOW_SECONDS = 60
 _auth_attempts: dict[tuple[str, str], tuple[float, int]] = {}
 _auth_attempts_lock = threading.Lock()
+
+CHAT_RATE_LIMIT = 30
+CHAT_RATE_WINDOW_SECONDS = 60
+_chat_attempts: dict[int, tuple[float, int]] = {}
+_chat_attempts_lock = threading.Lock()
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 
 # --- Auth Pydantic Schemas ---
 class UserAuthSchema(BaseModel):
@@ -44,11 +51,27 @@ class UserAuthSchema(BaseModel):
         return value
 
 class ChatRequestSchema(BaseModel):
-    query: str
+    query: str = Field(..., max_length=8000)
     session_id: Optional[str] = "default_session"
     provider_id: Optional[str] = "groq"
     model_id: Optional[str] = "llama-3.3-70b-versatile"
     api_key: Optional[str] = ""
+
+
+def resolve_api_key(payload_key: Optional[str] = None, settings: Any = None) -> str:
+    """
+    Resolve API key:
+    - Use payload_key if non-empty
+    - Otherwise, use settings.GROQ_API_KEY only if settings.ALLOW_SERVER_KEY is True
+    - Defaults to empty string (server key disabled by default)
+    """
+    if payload_key and payload_key.strip():
+        return payload_key.strip()
+    from app.core.config import settings as global_settings
+    active_settings = settings if settings is not None else global_settings
+    if getattr(active_settings, "ALLOW_SERVER_KEY", False):
+        return (getattr(active_settings, "GROQ_API_KEY", "") or "").strip()
+    return ""
 
 
 def _enforce_auth_rate_limit(request: Request, action: str) -> None:
@@ -75,6 +98,30 @@ def _enforce_auth_rate_limit(request: Request, action: str) -> None:
                 headers={"Retry-After": str(retry_after)},
             )
         _auth_attempts[key] = (started_at, count + 1)
+
+
+def _enforce_chat_rate_limit(user_id: int) -> None:
+    now = time.monotonic()
+    with _chat_attempts_lock:
+        expired = [
+            uid
+            for uid, (started_at, _) in _chat_attempts.items()
+            if now - started_at >= CHAT_RATE_WINDOW_SECONDS
+        ]
+        for uid in expired:
+            del _chat_attempts[uid]
+
+        started_at, count = _chat_attempts.get(user_id, (now, 0))
+        if now - started_at >= CHAT_RATE_WINDOW_SECONDS:
+            started_at, count = now, 0
+        if count >= CHAT_RATE_LIMIT:
+            retry_after = max(1, ceil(CHAT_RATE_WINDOW_SECONDS - (now - started_at)))
+            raise HTTPException(
+                status_code=429,
+                detail="Chat rate limit exceeded. Please wait before sending another message.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        _chat_attempts[user_id] = (started_at, count + 1)
 
 
 def get_current_user(
@@ -174,10 +221,18 @@ def upload_document(
     current_user: models.User = Depends(get_current_user),
 ):
     allowed_exts = [".pdf", ".docx", ".txt", ".md", ".markdown"]
-    filename = file.filename or "upload"
+    filename = os.path.basename(file.filename or "upload")
     ext = os.path.splitext(filename)[1].lower()
     if ext not in allowed_exts:
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Supported types: {', '.join(allowed_exts)}")
+
+    file_bytes = file.file.read(MAX_UPLOAD_SIZE + 1)
+    if len(file_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail="File size exceeds the maximum allowed limit of 10 MB.",
+        )
+    file.file.seek(0)
 
     tmp_path = None
     try:
@@ -195,6 +250,9 @@ def upload_document(
         db.commit()
         db.refresh(doc_rec)
         return {"message": "Document indexed successfully in Qdrant.", "document": result}
+    except ValueError as ve:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception:
         logger.exception("Document ingestion failed for %s", filename)
         db.rollback()
@@ -235,9 +293,11 @@ def delete_document(
     doc = db.query(models.DocumentRecord).filter(models.DocumentRecord.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
+    filename = doc.filename
     db.delete(doc)
     db.commit()
-    return {"message": f"Document '{doc.filename}' deleted successfully."}
+    delete_document_chunks(filename=filename)
+    return {"message": f"Document '{filename}' deleted successfully."}
 
 # --- Multi-Agent Chat Endpoint ---
 @router.post("/chat")
@@ -246,19 +306,24 @@ def chat_with_multi_agent(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    _enforce_chat_rate_limit(current_user.id)
+    effective_api_key = resolve_api_key(payload.api_key, settings)
+
     agent_result = execute_multi_agent_pipeline(
         query=payload.query,
         session_id=payload.session_id,
         provider_id=payload.provider_id,
         model_id=payload.model_id,
-        api_key=payload.api_key
+        api_key=effective_api_key
     )
+
+    sanitized_query = agent_result.get("sanitized_query", payload.query)
 
     # Persist Chat History
     chat_rec = models.ChatHistory(
         session_id=payload.session_id,
         user_id=current_user.id,
-        user_query=payload.query,
+        user_query=sanitized_query,
         bot_response=agent_result["final_response"],
         provider_id=payload.provider_id,
         model_id=payload.model_id
@@ -268,11 +333,11 @@ def chat_with_multi_agent(
     # Persist Observability Log
     eval_log = models.EvaluationLog(
         session_id=payload.session_id,
-        user_query=payload.query,
+        user_query=sanitized_query,
         retrieved_context=agent_result.get("context_text", ""),
         bot_response=agent_result["final_response"],
         latency_ms=agent_result["latency_ms"],
-        prompt_tokens=len(payload.query.split()),
+        prompt_tokens=len(sanitized_query.split()),
         completion_tokens=len(agent_result["final_response"].split()),
         confidence_score=agent_result["confidence_score"],
         citation_count=agent_result["citation_count"],

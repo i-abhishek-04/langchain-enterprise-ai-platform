@@ -15,11 +15,33 @@ INJECTION_PATTERNS = [
 
 # PII Regex Patterns
 PII_PATTERNS = {
-    "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+    "email": r"\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
     "phone": r"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b",
     "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
-    "credit_card": r"\b(?:\d[ -]*?){13,16}\b"
 }
+
+def is_valid_luhn(candidate: str) -> bool:
+    digits = [int(c) for c in candidate if c.isdigit()]
+    if not (13 <= len(digits) <= 19):
+        return False
+    checksum = 0
+    for i, d in enumerate(digits[::-1]):
+        if i % 2 == 1:
+            d = d * 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0
+
+def mask_credit_cards(text: str) -> str:
+    def repl(match: re.Match) -> str:
+        val = match.group(0)
+        digits = [c for c in val if c.isdigit()]
+        if 13 <= len(digits) <= 19 and is_valid_luhn(val):
+            return "[MASKED_CARD]"
+        return val
+
+    return re.sub(r"\b(?:\d[ -]*?){13,19}\b", repl, text)
 
 def detect_prompt_injection(user_input: str) -> Tuple[bool, str]:
     """Check for prompt injection and jailbreak patterns."""
@@ -35,7 +57,7 @@ def mask_pii(text: str) -> str:
     masked_text = re.sub(PII_PATTERNS["email"], "[MASKED_EMAIL]", masked_text)
     masked_text = re.sub(PII_PATTERNS["phone"], "[MASKED_PHONE]", masked_text)
     masked_text = re.sub(PII_PATTERNS["ssn"], "[MASKED_SSN]", masked_text)
-    masked_text = re.sub(PII_PATTERNS["credit_card"], "[MASKED_CARD]", masked_text)
+    masked_text = mask_credit_cards(masked_text)
     return masked_text
 
 def validate_input(user_input: str) -> Tuple[bool, str, str]:
@@ -49,11 +71,12 @@ def validate_input(user_input: str) -> Tuple[bool, str, str]:
     if len(user_input) > 8000:
         return False, "", "Prompt exceeds maximum allowed length of 8000 characters."
     
+    sanitized = mask_pii(user_input)
+
     is_injection, reason = detect_prompt_injection(user_input)
     if is_injection:
-        return False, user_input, reason
+        return False, sanitized, reason
         
-    sanitized = mask_pii(user_input)
     return True, sanitized, ""
 
 def calculate_dynamic_confidence(

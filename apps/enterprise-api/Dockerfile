@@ -12,8 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir . "psycopg[binary]>=3.2.0" && \
+RUN if [ -f pyproject.toml ]; then \
+        pip install --no-cache-dir --upgrade pip && \
+        pip install --no-cache-dir . "psycopg[binary]>=3.2.0" "psycopg2-binary>=2.9.9"; \
+    elif [ -f apps/enterprise-api/pyproject.toml ]; then \
+        pip install --no-cache-dir --upgrade pip && \
+        pip install --no-cache-dir ./apps/enterprise-api "psycopg[binary]>=3.2.0" "psycopg2-binary>=2.9.9" && \
+        cp -rn apps/enterprise-api/* . 2>/dev/null || true; \
+    fi && \
     python -c "import psycopg"
 
 EXPOSE 8000

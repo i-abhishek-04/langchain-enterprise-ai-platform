@@ -2,10 +2,14 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
-
 COPY . .
+
+RUN if [ -f package.json ]; then \
+        npm ci || npm install; \
+    elif [ -f apps/free-ai-playground/package.json ]; then \
+        cp -r apps/free-ai-playground/* . && \
+        (npm ci || npm install); \
+    fi
 
 ARG VITE_API_BASE_URL=http://localhost:8000/api/v1
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}

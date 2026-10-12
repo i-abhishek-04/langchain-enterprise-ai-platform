@@ -1,0 +1,32 @@
+services:
+  # 1. FastAPI Enterprise Backend API
+  - type: web
+    name: enterprise-ai-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./apps/enterprise-api/Dockerfile
+    dockerContext: ./apps/enterprise-api
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: DATABASE_URL
+        value: sqlite:///./enterprise_ai.db
+      - key: QDRANT_URL
+        value: http://localhost:6333
+
+  # 2. React + Vite Frontend (Free Static Site)
+  - type: web
+    name: enterprise-ai-frontend
+    runtime: static
+    plan: free
+    rootDir: apps/free-ai-playground
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false

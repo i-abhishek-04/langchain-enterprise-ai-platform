@@ -144,14 +144,46 @@ The browser displays a minimal login/register form and keeps its access token in
 
 For local setup, set `SECRET_KEY` to a unique random value in the backend process environment. If unset, the API generates an ephemeral random key and existing tokens become invalid after a server restart. Set `ADMIN_EMAIL` to the exact email address that should receive the first administrator role, then register that address. For Docker Compose, use `environment/.env` as shown above. Authentication rate limits are in-memory and per process, so production deployments with multiple workers should also enforce limits at a shared proxy or gateway.
 
-### Render deployment (Docker)
+### Render Deployment
 
-Render deploys each web service separately; it does not deploy this Compose stack as one service. Create two **Docker** web services from the repository:
+You can deploy this application on Render either using **Render Blueprints (1-Click)** or **Manual Setup**:
 
-1. **API:** Dockerfile path `apps/enterprise-api/Dockerfile`; set `SECRET_KEY`, `DATABASE_URL`, `QDRANT_URL`, `ADMIN_EMAIL`, and `ALLOWED_ORIGINS`. Use Render-managed PostgreSQL and a persistent/managed Qdrant endpoint for production; the default SQLite database and local Qdrant fallback are not durable across service replacement.
-2. **Frontend:** Dockerfile path `apps/free-ai-playground/Dockerfile`; set build argument `VITE_API_BASE_URL` to the API's public URL ending in `/api/v1`, such as `https://your-api.onrender.com/api/v1`.
+#### Option 1: Render Blueprint (Easiest & Recommended)
+1. In your Render Dashboard, click **New +** and select **Blueprint**.
+2. Connect your repository. Render will automatically read `render.yaml` and configure:
+   - **`enterprise-ai-api`** (Docker Web Service)
+   - **`enterprise-ai-frontend`** (Static Site with fast CDN hosting)
+3. Under Environment Variables for `enterprise-ai-frontend`, enter `VITE_API_BASE_URL` with your API URL: `https://<your-api-name>.onrender.com/api/v1`.
+4. Click **Apply**.
 
-The containers listen on Render's `PORT` environment variable. `VITE_API_BASE_URL` is embedded into the frontend at image build time, so changing it requires a frontend redeploy. Set `ALLOWED_ORIGINS` on the API to the deployed frontend origin (scheme and hostname, no path). Do not use `localhost` for the API URL in a deployed browser.
+#### Option 2: Manual Dashboard Setup
+
+Render deploys each service independently. You can deploy both services with the following settings:
+
+1. **Backend Web Service (`apps/enterprise-api`):**
+   - **Runtime:** `Docker` (or `Python 3`)
+   - **Root Directory:** `apps/enterprise-api`
+   - **Dockerfile Path:** `Dockerfile` (or `./Dockerfile`)
+   - **Environment Variables:**
+     - `PORT`: `8000` (Render binds automatically via `$PORT`)
+     - `SECRET_KEY`: A secure random secret string
+     - `ALLOWED_ORIGINS`: `*` or your frontend Render URL (e.g. `https://your-frontend.onrender.com`)
+     - `DATABASE_URL`: `sqlite:///./enterprise_ai.db` (or Render PostgreSQL internal URL)
+     - `QDRANT_URL`: `http://localhost:6333` (in-memory fallback is used automatically if no external Qdrant is attached)
+
+2. **Frontend Service (`apps/free-ai-playground`):**
+   - **Option A: Static Site (Recommended — Free & No Cold Starts):**
+     - **Root Directory:** `apps/free-ai-playground`
+     - **Build Command:** `npm install && npm run build`
+     - **Publish Directory:** `dist`
+     - **Environment Variable:** `VITE_API_BASE_URL` set to `https://your-api.onrender.com/api/v1`
+   - **Option B: Docker Web Service:**
+     - **Root Directory:** `apps/free-ai-playground`
+     - **Dockerfile Path:** `Dockerfile`
+     - **Docker Build Argument:** `VITE_API_BASE_URL=https://your-api.onrender.com/api/v1`
+
+> [!NOTE]
+> Since Vite bakes `VITE_API_BASE_URL` into static assets during build time, ensure `VITE_API_BASE_URL` is set before triggering the frontend build. The backend automatically allows `*.onrender.com` origins for CORS requests.
 
 ---
 
